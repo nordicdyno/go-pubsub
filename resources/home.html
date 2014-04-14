@@ -1,0 +1,174 @@
+<html>
+<head>
+<title>Chat Example</title>
+<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.4.2/jquery.min.js"></script>
+<script type="text/javascript">
+    'use strict';
+
+    var connection;
+$(function() {
+
+    //var connections; // obj: channel_name => true
+    //var conn;
+    var msg = $("#msg");
+    var log = $("#log");
+
+    function appendLog(msg) {
+        var d = log[0]
+        var doScroll = d.scrollTop == d.scrollHeight - d.clientHeight;
+        msg.appendTo(log)
+        if (doScroll) {
+            d.scrollTop = d.scrollHeight - d.clientHeight;
+        }
+    }
+
+    $('#message_form').submit(function(event) {
+        event.preventDefault();
+        var input = $(this).find('input[type="text"]');
+        var channel = $('#subscribe_form').find('input[type="text"]').val();
+        var msg = {
+            "event": "chat_message",
+            "channel": channel,
+            "data": {
+                "content": input.val(),
+                "delete": 0, // ?
+                'dst': "chat",
+                'id': 2219477,
+                'ip': "37.209.247.2",
+                'match_id': 31,
+                'timestamp': 1378303082,
+                'type': "fan_tournament",
+                'user_email': "ruban@sports.ru",
+                'user_id': "150247669",
+                'user_name': "Jmunb",
+                'user_profile_url': "/profile/150247669/",
+            }
+        }
+
+        /*
+        * console.log(input.val())
+        * connection.send(input.val());
+        * connection.send(JSON.stringify(msg));
+        */
+
+        $.post('/channel/' + channel + '/event/chat_message/',
+                JSON.stringify(msg),
+                function (res){console.log(res)}
+        )
+
+        input.val('');
+    });
+
+    $('#subscribe_form').submit(function(event) {
+        event.preventDefault();
+        var input = $(this).find('input[type="text"]');
+        // console.log(input)
+        var input_val = input.val()
+        // console.log(input.val())
+
+        var msg = {
+            "event": "subscribe",
+            "channel": input_val,
+            "data": {
+                "auth": 'optional',
+                "channel_data": 'optional'
+            }
+        }
+        console.log(msg)
+        connection.send(JSON.stringify(msg));
+        console.log(JSON.stringify(msg))
+        
+        // input.val('');
+        // return false
+    });
+
+    function connect() {
+        if (!window["WebSocket"]) {
+            appendLog($("<div><b>Your browser does not support WebSockets.</b></div>"));
+            return
+        }
+        var conn = new WebSocket("ws://{{$}}/socket");
+        conn.onclose = function(evt) {
+            appendLog($("<div><b>Connection closed.</b></div>"))
+        }
+        conn.onopen = function(evt) {
+            appendLog($("<div><b>Connection opened.</b></div>"))
+        }
+        conn.onerror = function(evt) {
+            appendLog($("<div><b>Connection error.</b></div>"))
+        }
+        conn.onmessage = function(evt) {
+            appendLog($("<div/>").text(evt.data))
+        }
+        connection = conn
+    }
+
+    connect();
+/*
+    $("#form").submit(function() {
+        if (!conn) {
+            return false;
+        }
+        if (!msg.val()) {
+            return false;
+        }
+        conn.send(msg.val());
+        msg.val("");
+        return false
+    });
+*/
+});
+</script>
+<style type="text/css">
+html {
+    overflow: hidden;
+}
+
+body {
+    overflow: hidden;
+    padding: 0;
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    background: gray;
+}
+
+#log {
+    background: white;
+    margin: 0;
+    padding: 0.5em 0.5em 0.5em 0.5em;
+    position: absolute;
+    top: 0.5em;
+    left: 0.5em;
+    right: 0.5em;
+    bottom: 3em;
+    overflow: auto;
+}
+
+#form {
+    padding: 0 0.5em 0 0.5em;
+    margin: 0;
+    position: absolute;
+    bottom: 1em;
+    left: 0px;
+    width: 100%;
+    overflow: hidden;
+}
+
+</style>
+</head>
+<body>
+    <div id="log"></div>
+    <div id="form">
+        <form action="." id='message_form'>
+            <input type="text" id='message_text'>
+            <input type="submit" value="»">
+        </form>
+
+        <form action="." id='subscribe_form'>
+            <input type="text">
+            <input type="submit" value="subscribe">
+        </form>
+    </div>
+</body>
+</html>
