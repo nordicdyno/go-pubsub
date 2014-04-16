@@ -3,6 +3,7 @@ package main
 // TODO :   add statistic on /stat url
 //          cleanup code (grep TODO/FIXME/XXX)
 //          add flags
+//          Add tests
 // MAYBE: change topic/channels naming schema (add prefix, or allow real names)
 
 import (
@@ -16,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"text/template"
 
 	"github.com/gorilla/mux"
@@ -41,7 +43,10 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	uinqId = (NameToSHA1(string(pid) + hostName))[0 : ChannelMaxLen-1]
+	uinqId = (hostName + "_" + strconv.Itoa(pid))
+	if len(uinqId) > ChannelMaxLen {
+		uinqId = uinqId[0 : ChannelMaxLen-1]
+	}
 }
 
 func defaultAssetPath() string {
@@ -73,50 +78,6 @@ type PostMessageData struct {
 }
 */
 
-func postHandler(w http.ResponseWriter, req *http.Request) {
-	defer req.Body.Close()
-	requestBody, err := ioutil.ReadAll(req.Body)
-	if err != nil {
-		log.Println("ERROR: can't read http body")
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	message := PostMessage{}
-	err = json.Unmarshal(requestBody, &message)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Println("ERROR: invalid JSON data")
-		return
-	}
-
-	vars := mux.Vars(req)
-	log.Printf("postHandler/channel => %s\n", vars["channel"])
-	log.Printf("postHandler/message: %+v\n", message)
-
-	bJSON, err := json.Marshal(message.Data)
-	if err != nil {
-		log.Println("json marshaling error: " + err.Error())
-		return
-	}
-	// io.Reader
-	//var defClient = go-httpclient
-	httpclient := &http.Client{}
-	url := fmt.Sprintf(addrNsqdHTTP+"/put?topic=%s", GenNSQtopicName(vars["channel"]))
-
-	log.Printf("POST to %s; bJSON => «%s»\n", url, string(bJSON))
-	//newBuf := bytes.NewBuffer(bJSON)
-	nsqReq, err := http.NewRequest("POST", url, bytes.NewBuffer(bJSON))
-	nsqResp, err := httpclient.Do(nsqReq)
-	// FIXME : use timeouts or other http client
-	if err != nil {
-		log.Println("NSQ publish error: " + err.Error())
-		return
-	}
-	log.Println("NSQ publish probably ok :)")
-	nsqResp.Body.Close()
-}
-
 func main() {
 	flag.Parse()
 	homePath := filepath.Join(*assets, "home.html")
@@ -140,4 +101,51 @@ func main() {
 	if err := http.ListenAndServe(*addr, nil); err != nil {
 		log.Fatal("ListenAndServe:", err)
 	}
+}
+
+func postHandler(w http.ResponseWriter, req *http.Request) {
+	defer req.Body.Close()
+	requestBody, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		log.Println("ERROR: can't read http body")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	message := PostMessage{}
+	err = json.Unmarshal(requestBody, &message)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Println("ERROR: invalid JSON data")
+		return
+	}
+
+	vars := mux.Vars(req)
+	log.Printf("postHandler/channel => %s\n", vars["channel"])
+	log.Printf("postHandler/message: %+v\n", message)
+
+	/*
+		bJSON, err := json.Marshal(message.Data)
+		if err != nil {
+			log.Println("json marshaling error: " + err.Error())
+			return
+		}
+	*/
+
+	httpclient := &http.Client{}
+	url := fmt.Sprintf(addrNsqdHTTP+"/put?topic=%s", GenNSQtopicName(vars["channel"]))
+
+	//log.Printf("POST to %s; bJSON => «%s»\n", url, string(bJSON))
+	//nsqReq, err := http.NewRequest("POST", url, bytes.NewBuffer(bJSON))
+	log.Printf("POST to %s; bJSON => «%s»\n", url, string(requestBody))
+	nsqReq, err := http.NewRequest("POST", url, bytes.NewBuffer(requestBody))
+	nsqResp, err := httpclient.Do(nsqReq)
+	defer nsqResp.Body.Close()
+
+	// FIXME : use timeouts or other http client
+	if err != nil {
+		log.Println("NSQ publish error: " + err.Error())
+		return
+	}
+	log.Println("NSQ publish probably ok :)")
 }

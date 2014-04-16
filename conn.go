@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	//"io/ioutil"
 
 	"github.com/gorilla/websocket"
 )
@@ -26,7 +27,6 @@ func (c *connection) reader() {
 			break
 		}
 		c.processMessage(message)
-		//h.broadcast <- message
 	}
 	c.ws.Close()
 }

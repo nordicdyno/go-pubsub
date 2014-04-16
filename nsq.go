@@ -1,20 +1,28 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"time"
-	//"strings"
 
 	"github.com/bitly/go-nsq"
 )
+
+// TODO : rename non-NSQ Topics to Rooms (to avoid misunderstanding)
+
+type ConnectionsMap map[*connection]bool
+type TopicsMap map[string]bool
 
 type NsqTopicReader struct {
 	topicRealName   string
 	channelRealName string
 	r               *nsq.Reader
-	connections     map[*connection]bool
+	muMapsLock      sync.RWMutex
+	topic2conns     map[string]ConnectionsMap
+	conn2topics     map[*connection]TopicsMap
 }
 
 const TopicMaxLen = 32
@@ -50,8 +58,11 @@ func NewNsqTopicReader(topic string) (*NsqTopicReader, error) {
 	httpclient := &http.Client{}
 	url := fmt.Sprintf(addrNsqdHTTP+"/create_topic?topic=%s", topicName)
 	nsqReq, err := http.NewRequest("POST", url, nil)
+	if err != nil {
+		return nil, err
+	}
 	nsqResp, err := httpclient.Do(nsqReq)
-	_ = nsqResp // TODO : process me ?
+	defer nsqResp.Body.Close()
 	// FIXME : use timeouts or other http client
 	if err != nil {
 		log.Println("NSQ create topic error: " + err.Error())
@@ -63,8 +74,8 @@ func NewNsqTopicReader(topic string) (*NsqTopicReader, error) {
 	nReader := &NsqTopicReader{
 		topicRealName:   topicName,
 		channelRealName: realChannelName,
-		//r:               *nsq.Reader,
-		connections: make(map[*connection]bool),
+		topic2conns:     make(map[string]ConnectionsMap),
+		conn2topics:     make(map[*connection]TopicsMap),
 	}
 
 	nsqReader.VerboseLogging = true
@@ -84,14 +95,52 @@ func NewNsqTopicReader(topic string) (*NsqTopicReader, error) {
 	return nReader, nil
 }
 
+func (ntr *NsqTopicReader) AddConnection(c *connection, topic string) {
+	log.Println("add connection for topic " + topic)
+
+	ntr.muMapsLock.Lock()
+	if ntr.topic2conns[topic] == nil {
+		ntr.topic2conns[topic] = make(ConnectionsMap)
+	}
+	if ntr.conn2topics[c] == nil {
+		ntr.conn2topics[c] = make(TopicsMap)
+	}
+	ntr.topic2conns[topic][c] = true
+	ntr.conn2topics[c][topic] = true
+	ntr.muMapsLock.Unlock()
+}
+
+func (ntr *NsqTopicReader) RemoveConnection(c *connection) {
+	ntr.muMapsLock.Lock()
+	for topic, _ := range ntr.conn2topics[c] {
+		delete(ntr.topic2conns[topic], c)
+		log.Println("  channel: " + topic)
+	}
+	delete(ntr.conn2topics, c)
+	ntr.muMapsLock.Unlock()
+}
+
 func (ntr *NsqTopicReader) HandleMessage(msg *nsq.Message) error {
 	// TODO : add to log msg.Id msg.Timestamp
 	log.Printf("Handled message\n")
 	log.Printf("body: %v\n", string(msg.Body))
 	// FIXME: check size of message body
-	for c := range ntr.connections {
-		log.Println("...send to consumer")
+
+	message := SubMessage{}
+	err := json.Unmarshal(msg.Body, &message)
+	if err != nil {
+		log.Println("NSQ HandleMessage ERROR: invalid JSON subscribe data")
+		return err
+	}
+	//log.Printf("message+: %v\n", message)
+
+	// data race (a)
+	// TODO : slurp all keys before sending ?
+	ntr.muMapsLock.RLock()
+	for c, _ := range ntr.topic2conns[message.Channel] {
+		log.Println("...send to consumers")
 		c.send <- msg.Body
 	}
+	ntr.muMapsLock.RUnlock()
 	return nil
 }

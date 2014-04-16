@@ -1,10 +1,14 @@
 package main
 
 import (
-	"fmt"
 	"log"
-	"net/http"
 )
+
+type SubMessage struct {
+	Event   string
+	Channel string `json:"channel"`
+	// Data    SubMessageData `json:"data"` // just ignore it
+}
 
 type hub struct {
 	// Registered connections.
@@ -20,7 +24,7 @@ type hub struct {
 	addSubscriber chan *Subscriber
 
 	// Registered Nsq Readers
-	nsqReaders map[string]*NsqTopicReader // topic -> nsqReader
+	nsqReaders map[string]*NsqTopicReader // NSQ topic -> nsqReader
 }
 
 var h = hub{
@@ -44,43 +48,18 @@ func (h *hub) run() {
 			log.Println("connection deleted from hub's poll OK")
 
 			for topic, reader := range c.subscribed {
-				_ = reader
-				conns := h.nsqReaders[topic].connections
-				log.Printf("found reader for topic '%s', (real names is '%s':'%s')\n",
-					topic, reader.topicRealName, reader.channelRealName,
-				)
-				log.Printf("topic conns count: %v\n", len(conns))
-				delete(conns, c)
-				if len(conns) == 0 {
-					log.Printf("stop & cleanup reader for topic '%s'", topic)
-					reader.r.Stop()
-					delete(h.nsqReaders, topic)
-					// TODO : refactor me :)
-					/* delete topic */
-					httpclient := &http.Client{}
-					url := fmt.Sprintf(addrNsqlookupdHTTP+"/delete_topic?topic=%s", reader.topicRealName)
-					log.Println("REQUEST on " + url)
-					nsqReq, err := http.NewRequest("GET", url, nil)
-					nsqResp, err := httpclient.Do(nsqReq)
-					_ = nsqResp // TODO : process me ?
-					// FIXME : use timeouts or other http client
-					if err != nil {
-						log.Println("NSQ delete topic error: " + err.Error())
-						break
-					}
-					log.Println("NSQ delete topic is probably ok :)")
-					/* -------------------------- */
-					break // break loop (cleanup is over)
-				}
-				/* */
+				log.Println("delete connection on topic:" + topic)
+				reader.RemoveConnection(c)
 			}
 			close(c.send)
 			//c.subscribed = nil
 		case sub := <-h.addSubscriber:
 			log.Println("h.addSubscriber fired")
-			reader, ok := h.nsqReaders[sub.Topic]
+			nsqTopicName := GenNSQtopicName(sub.Topic)
+			reader, is_reader_exists := h.nsqReaders[nsqTopicName]
+
 			c := sub.Conn
-			if !ok {
+			if !is_reader_exists {
 				var err error
 				reader, err = NewNsqTopicReader(sub.Topic)
 				if err != nil {
@@ -88,9 +67,10 @@ func (h *hub) run() {
 					break
 				}
 			}
-			c.subscribed[sub.Topic] = reader
-			reader.connections[c] = true
-			h.nsqReaders[sub.Topic] = reader
+			c.subscribed[nsqTopicName] = reader
+			// reader.connections[c] = true
+			h.nsqReaders[nsqTopicName] = reader
+			reader.AddConnection(c, sub.Topic)
 		}
 	}
 
