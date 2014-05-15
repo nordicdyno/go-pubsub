@@ -95,7 +95,7 @@ func main() {
 	r.HandleFunc("/channel/{channel}/event/chat_message/", postHandler).
 		Methods("POST")
 
-	http.HandleFunc("/socket", wsHandler)
+	http.HandleFunc("/socket/websocket", wsHandler)
 	http.Handle("/", r)
 
 	if err := http.ListenAndServe(*addr, nil); err != nil {
@@ -116,7 +116,7 @@ func postHandler(w http.ResponseWriter, req *http.Request) {
 	err = json.Unmarshal(requestBody, &message)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Println("ERROR: invalid JSON data")
+		log.Println("ERROR: invalid JSON data: " + string(requestBody))
 		return
 	}
 

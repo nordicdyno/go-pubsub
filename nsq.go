@@ -80,6 +80,7 @@ func NewNsqTopicReader(topic string) (*NsqTopicReader, error) {
 
 	nsqReader.VerboseLogging = true
 	nsqReader.AddHandler(nReader)
+	// TODO: move magic numbers to flags or global vars/consts
 	// duration between polling lookupd for new connections (default60 * time.Second)
 	nsqReader.LookupdPollInterval = 30 * time.Second
 	nsqReader.SetMaxInFlight(10)

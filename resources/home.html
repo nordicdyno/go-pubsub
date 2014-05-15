@@ -87,7 +87,7 @@ $(function() {
             appendLog($("<div><b>Your browser does not support WebSockets.</b></div>"));
             return
         }
-        var conn = new WebSocket("ws://{{$}}/socket");
+        var conn = new WebSocket("ws://{{$}}/socket/websocket");
         conn.onclose = function(evt) {
             appendLog($("<div><b>Connection closed.</b></div>"))
         }

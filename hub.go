@@ -68,8 +68,8 @@ func (h *hub) run() {
 				}
 			}
 			c.subscribed[nsqTopicName] = reader
-			// reader.connections[c] = true
 			h.nsqReaders[nsqTopicName] = reader
+
 			reader.AddConnection(c, sub.Topic)
 		}
 	}
