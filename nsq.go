@@ -63,12 +63,12 @@ func NewNsqTopicReader(topic string) (*NsqTopicReader, error) {
 		return nil, err
 	}
 	nsqResp, err := httpclient.Do(nsqReq)
-	defer nsqResp.Body.Close()
 	// FIXME : use timeouts or other http client
 	if err != nil {
 		log.Println("NSQ create topic error: " + err.Error())
 		return nil, err
 	}
+	defer nsqResp.Body.Close()
 	log.Println("NSQ create topic is probably ok :)")
 	/* -------------------------- */
 
