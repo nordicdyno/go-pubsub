@@ -27,7 +27,8 @@ var (
 	addr           = flag.String("addr", ":8080", "http service address")
 	assets         = flag.String("assets", defaultAssetPath(), "path to assets")
 	addrNsqd       = flag.String("nsqd-http", "localhost:4151", "nsqd HTTP address")
-	addrNsqlookupd = flag.String("lookupd-http", "localhost:14161", "lookupd HTTP address")
+	addrNsqdTCP    = flag.String("nsqd", "", "nsqd TCP address")
+	addrNsqlookupd = flag.String("lookupd-http", "localhost:4161", "lookupd HTTP address")
 
 	homeTempl *template.Template
 	pid       = os.Getpid()

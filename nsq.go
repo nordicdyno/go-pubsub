@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -78,7 +79,10 @@ func NewNsqTopicReader(topic string) (*NsqTopicReader, error) {
 		conn2topics:     make(map[*connection]TopicsMap),
 	}
 
-	nsqReader.VerboseLogging = true
+	// TODO: move to Environment var
+	if os.Getenv("NSQ_VERBOSE") != "" {
+		nsqReader.VerboseLogging = true
+	}
 	nsqReader.AddHandler(nReader)
 	// TODO: move magic numbers to flags or global vars/consts
 	// duration between polling lookupd for new connections (default60 * time.Second)
@@ -86,9 +90,14 @@ func NewNsqTopicReader(topic string) (*NsqTopicReader, error) {
 	nsqReader.SetMaxInFlight(10)
 
 	//addr := "tank01:4150"
-	err = nsqReader.ConnectToLookupd(*addrNsqlookupd)
-	if err != nil {
-		log.Println("NSQ connection error: " + err.Error())
+	var nsqErr error
+	if *addrNsqdTCP != "" {
+		nsqErr = nsqReader.ConnectToNSQ(*addrNsqdTCP)
+	} else {
+		nsqErr = nsqReader.ConnectToLookupd(*addrNsqlookupd)
+	}
+	if nsqErr != nil {
+		log.Println("NSQ connection error: " + nsqErr.Error())
 		return nil, err
 	}
 	nReader.r = nsqReader
