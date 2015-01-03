@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -20,7 +21,7 @@ type TopicsMap map[string]bool
 type NsqTopicReader struct {
 	topicRealName   string
 	channelRealName string
-	r               *nsq.Reader
+	r               *nsq.Consumer
 	muMapsLock      sync.RWMutex
 	topic2conns     map[string]ConnectionsMap
 	conn2topics     map[*connection]TopicsMap
@@ -28,6 +29,9 @@ type NsqTopicReader struct {
 
 const TopicMaxLen = 32
 const ChannelMaxLen = TopicMaxLen - len("#ephemeral")
+
+var buf bytes.Buffer
+var logger = log.New(&buf, "logger: ", log.Lshortfile)
 
 type Subscriber struct {
 	Conn  *connection
@@ -45,8 +49,14 @@ func NewNsqTopicReader(topic string) (*NsqTopicReader, error) {
 	// + add http://golang.org/pkg/crypto/sha1/
 	// http://www.quora.com/Cryptography/What-is-the-smallest-prefix-length-of-an-SHA1-hash-that-would-guarantee-uniqueness-in-a-reasonable-object-space
 
+  // TODO: move magic numbers to flags or global vars/consts
+	// duration between polling lookupd for new connections (default60 * time.Second)
+	config := nsq.NewConfig()
+	config.Set("LookupdPollInterval", 30 * time.Second)
+	config.Set("MaxInFlight", 10)
+
 	realChannelName := uinqId + "#ephemeral"
-	nsqReader, err := nsq.NewReader(topicName, realChannelName)
+	nsqReader, err := nsq.NewConsumer(topicName, realChannelName, config)
 	log.Println("NSQ channel name is " + realChannelName)
 
 	if err != nil {
@@ -81,20 +91,16 @@ func NewNsqTopicReader(topic string) (*NsqTopicReader, error) {
 
 	// TODO: move to Environment var
 	if os.Getenv("NSQ_VERBOSE") != "" {
-		nsqReader.VerboseLogging = true
+		nsqReader.SetLogger(logger, nsq.LogLevelDebug)
 	}
 	nsqReader.AddHandler(nReader)
-	// TODO: move magic numbers to flags or global vars/consts
-	// duration between polling lookupd for new connections (default60 * time.Second)
-	nsqReader.LookupdPollInterval = 30 * time.Second
-	nsqReader.SetMaxInFlight(10)
 
 	//addr := "tank01:4150"
 	var nsqErr error
 	if *addrNsqdTCP != "" {
-		nsqErr = nsqReader.ConnectToNSQ(*addrNsqdTCP)
+		nsqErr = nsqReader.ConnectToNSQD(*addrNsqdTCP)
 	} else {
-		nsqErr = nsqReader.ConnectToLookupd(*addrNsqlookupd)
+		nsqErr = nsqReader.ConnectToNSQLookupd(*addrNsqlookupd)
 	}
 	if nsqErr != nil {
 		log.Println("NSQ connection error: " + nsqErr.Error())
