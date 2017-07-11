@@ -134,7 +134,7 @@ func postHandler(w http.ResponseWriter, req *http.Request) {
 	*/
 
 	httpclient := &http.Client{}
-	url := fmt.Sprintf(addrNsqdHTTP+"/put?topic=%s", GenNSQtopicName(vars["channel"]))
+	url := fmt.Sprintf(addrNsqdHTTP+"/pub?topic=%s", GenNSQtopicName(vars["channel"]))
 
 	//log.Printf("POST to %s; bJSON => «%s»\n", url, string(bJSON))
 	//nsqReq, err := http.NewRequest("POST", url, bytes.NewBuffer(bJSON))
